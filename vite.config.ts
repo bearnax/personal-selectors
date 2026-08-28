@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
-// Served from https://<user>.github.io/potential-chainsaw/, so assets need the
+// Served from https://<user>.github.io/personal-selectors/, so assets need the
 // repo name as their base path. Override with BASE_PATH=/ for a root deploy.
-const base = process.env['BASE_PATH'] ?? '/potential-chainsaw/';
+const base = process.env['BASE_PATH'] ?? '/personal-selectors/';
 
 export default defineConfig({
   base,
