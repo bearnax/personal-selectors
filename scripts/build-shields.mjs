@@ -1,9 +1,8 @@
 /**
- * Turn the hand-kept shield spreadsheet into a bundled TypeScript module.
+ * Turn the shield data source into a bundled TypeScript module.
  *
- * Mirrors `build-weapons.mjs` exactly: the sheet is the single place to edit
- * a shield's familiarity, and every weight and lockout downstream is derived
- * from it at runtime.
+ * The source of truth is Airtable, but this script falls back to a local
+ * CSV if no API keys are present.
  *
  *   node scripts/build-shields.mjs
  */
@@ -11,6 +10,18 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+
+try {
+  const envContent = readFileSync('.env', 'utf8');
+  for (const line of envContent.split('\n')) {
+    const match = line.trim().match(/^([^=]+)=(.*)$/);
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].replace(/^['"](.*)['"]$/, '$1');
+    }
+  }
+} catch (e) {
+  // Ignore if .env doesn't exist
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(here, 'shields-source.csv');
@@ -52,6 +63,55 @@ function parseCsv(text) {
   return rows.filter((r) => r.some((cell) => cell.trim() !== ''));
 }
 
+async function loadAirtableData(tableName) {
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  const baseId = process.env.AIRTABLE_BASE_ID;
+  if (!apiKey || !baseId) return null;
+
+  console.log(`Fetching ${tableName} from Airtable...`);
+  const allRecords = [];
+  let offset = undefined;
+
+  do {
+    let url = `https://api.airtable.com/v0/${baseId}/${tableName}`;
+    if (offset) {
+      url += `?offset=${offset}`;
+    }
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Airtable API HTTP ${res.status}: ${await res.text()}`);
+    }
+
+    const data = await res.json();
+    allRecords.push(...data.records.map(r => r.fields));
+    offset = data.offset;
+  } while (offset);
+
+  return allRecords;
+}
+
+async function loadData() {
+  const airtableData = await loadAirtableData('Shields');
+  if (airtableData) return airtableData;
+
+  console.warn(`Missing AIRTABLE_API_KEY or AIRTABLE_BASE_ID. Falling back to local ${SOURCE}.`);
+  const csvText = readFileSync(SOURCE, 'utf8');
+  const rows = parseCsv(csvText);
+  const header = rows.shift().map((h) => h.trim());
+  
+  return rows.map((row) => {
+    const obj = {};
+    for (let i = 0; i < header.length; i++) {
+      obj[header[i]] = row[i];
+    }
+    return obj;
+  });
+}
+
 /** The sheet's "Used" column, as a 0-5 familiarity score. Same map as weapons. */
 const USED_SCORES = new Map([
   ['big time', 0],
@@ -62,41 +122,16 @@ const USED_SCORES = new Map([
   ['', 5],
 ]);
 
-async function loadCsv() {
-  const url = process.env.SHIELDS_CSV_URL;
-  if (url) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      console.log(`Fetched shields data from ${url}`);
-      return await res.text();
-    } catch (err) {
-      console.warn(`Failed to fetch SHIELDS_CSV_URL: ${err.message}. Falling back to local.`);
-    }
-  }
-  return readFileSync(SOURCE, 'utf8');
-}
-
-const csvText = await loadCsv();
-const rows = parseCsv(csvText);
-const header = rows.shift().map((h) => h.trim());
-const col = (name) => header.indexOf(name);
-const iName = col('Name');
-const iWeight = col('Weight');
-const iType = col('Shield Type');
-const iDlc = col('DLC?');
-const iUsed = col('Used');
-const iZone = col('earliest_zone');
-
+const records = await loadData();
 const shields = [];
 const unknownUsed = new Set();
 
-for (const row of rows) {
-  const name = (row[iName] ?? '').trim();
+for (const row of records) {
+  const name = (row['Name'] ?? '').toString().trim();
   if (!name) continue;
 
-  const type = (row[iType] ?? '').trim();
-  const usedText = (row[iUsed] ?? '').trim().toLowerCase();
+  const type = (row['Shield Type'] ?? '').toString().trim();
+  const usedText = (row['Used'] ?? '').toString().trim().toLowerCase();
 
   let familiarity = USED_SCORES.get(usedText);
   if (familiarity === undefined) {
@@ -104,18 +139,25 @@ for (const row of rows) {
     familiarity = 5;
   }
 
-  // The numeric column wins when it is present and sane; it is the value I
-  // actually tuned by hand.
-  const raw = Number((row[iWeight] ?? '').trim());
+  const rawWeight = row['Weight'];
+  const raw = typeof rawWeight === 'number' ? rawWeight : Number((rawWeight ?? '').toString().trim());
   const weight = Number.isFinite(raw) && raw >= 0 && raw <= 5 ? raw : familiarity;
   
-  const zoneRaw = iZone !== -1 ? Number((row[iZone] ?? '').trim()) : 1;
+  const rawZone = row['earliest_zone'];
+  const zoneRaw = typeof rawZone === 'number' ? rawZone : Number((rawZone ?? '').toString().trim());
   const zone = Number.isFinite(zoneRaw) && zoneRaw >= 1 && zoneRaw <= 9 ? zoneRaw : 1;
+
+  let dlc = row['DLC?'];
+  if (typeof dlc === 'string') {
+    dlc = dlc.includes('✅');
+  } else {
+    dlc = !!dlc;
+  }
 
   shields.push({
     name,
     type,
-    dlc: (row[iDlc] ?? '').includes('✅'),
+    dlc,
     familiarity: weight,
     earliest_zone: zone,
   });
@@ -138,9 +180,9 @@ const shieldLines = shields
 const typeLines = types.map((t) => `  ${str(t)},`).join('\n');
 
 const body = `/**
- * The shield rack, generated from the spreadsheet by \`scripts/build-shields.mjs\`.
+ * The shield rack, generated from the spreadsheet/Airtable by \`scripts/build-shields.mjs\`.
  *
- * Do not edit by hand: edit \`scripts/shields-source.csv\` and re-run the script.
+ * Do not edit by hand.
  *
  * \`familiarity\` is 0-5 where 0 means "used big time" and 5 means "never really
  * touched it". Every shield here shipped at 3/5 as a neutral starting point —

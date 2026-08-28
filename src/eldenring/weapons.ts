@@ -1,7 +1,7 @@
 /**
- * The armoury, generated from the spreadsheet by `scripts/build-weapons.mjs`.
+ * The armoury, generated from the spreadsheet/Airtable by `scripts/build-weapons.mjs`.
  *
- * Do not edit by hand: edit `scripts/weapons-source.csv` and re-run the script.
+ * Do not edit by hand.
  *
  * `familiarity` is 0-5 where 0 means "used big time" and 5 means "never really
  * touched it". It is the only opinion in this file; every weighting decision is
@@ -327,7 +327,7 @@ export const WEAPONS: readonly Weapon[] = [
   { name: 'Godslayer\'s Seal', type: 'Sacred Seal', dlc: false, familiarity: 0, earliest_zone: 1 },
   { name: 'Golden Order Seal', type: 'Sacred Seal', dlc: false, familiarity: 5, earliest_zone: 1 },
   { name: 'Gravel Stone Seal', type: 'Sacred Seal', dlc: false, familiarity: 3, earliest_zone: 1 },
-  { name: 'Spiraltree Seal', type: 'Sacred Seal', dlc: true, familiarity: 5, earliest_zone: 1 },
+  { name: 'Spiraltree Seal', type: 'Sacred Seal', dlc: true, familiarity: 0, earliest_zone: 1 },
   { name: 'Bloodfiend\'s Fork', type: 'Spear', dlc: true, familiarity: 5, earliest_zone: 1 },
   { name: 'Bolt of Gransax', type: 'Spear', dlc: false, familiarity: 1, earliest_zone: 1 },
   { name: 'Celebrant\'s Rib-Rake', type: 'Spear', dlc: false, familiarity: 5, earliest_zone: 1 },
