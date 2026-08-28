@@ -28,6 +28,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Hydrate from Airtable
+        run: npm run data
+        env:
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
       # Typecheck + tests gate the build, so a broken commit never ships.
       - run: npm run check
 

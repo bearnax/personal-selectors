@@ -1,7 +1,7 @@
 /**
- * The shield rack, generated from the spreadsheet by `scripts/build-shields.mjs`.
+ * The shield rack, generated from the spreadsheet/Airtable by `scripts/build-shields.mjs`.
  *
- * Do not edit by hand: edit `scripts/shields-source.csv` and re-run the script.
+ * Do not edit by hand.
  *
  * `familiarity` is 0-5 where 0 means "used big time" and 5 means "never really
  * touched it". Every shield here shipped at 3/5 as a neutral starting point —
